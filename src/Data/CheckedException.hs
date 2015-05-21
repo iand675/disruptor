@@ -21,6 +21,7 @@ module Data.CheckedException
     , Checked
     , ok
     , report
+    , onOk
     ) where
 
 import Data.Dynamic
@@ -34,6 +35,10 @@ report = pure . Left . liftUnion
 ok :: Applicative f => a -> f (Checked s a)
 ok = pure . Right
 {-# INLINE ok #-}
+
+onOk :: Monad m => Checked s a -> (a -> m b) -> m (Checked s b)
+onOk (Right x) f = Right <$> f x
+onOk (Left err) _ = return $ Left err
 
 -- | The @Union@ type - the phantom parameter @s@ is a list of types
 -- denoting what this @Union@ might contain.
