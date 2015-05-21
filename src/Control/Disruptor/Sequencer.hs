@@ -1,18 +1,11 @@
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies        #-}
-{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE DataKinds #-}
 module Control.Disruptor.Sequencer where
 import Control.Disruptor.Cursor
+import Control.Disruptor.Math
 import Control.Disruptor.Sequence
 import Control.Disruptor.SequenceBarrier
 import Data.Foldable
 import Data.Int
-import GHC.TypeLits
-
-newtype PowerOf (n :: Nat) = Power { power :: Word }
-
-nTo :: forall a n. (KnownNat n, Integral a) => PowerOf (n :: Nat) -> a
-nTo p = fromIntegral (natVal p) ^ fromIntegral (power p)
 
 class Sequenced a where
   getBufferSize :: a -> IO (PowerOf 2)
