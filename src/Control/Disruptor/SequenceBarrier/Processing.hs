@@ -7,7 +7,7 @@ import qualified Control.Disruptor.WaitStrategy as Wait
 import qualified Data.Foldable as F
 import Data.IORef
 
-processingSequenceBarrier :: (F.Foldable f, Sequencer s, Wait.WaitStrategy w) => s -> w -> Sequence -> f Sequence -> IO (SequenceBarrier s)
+processingSequenceBarrier :: (F.Foldable f, Sequencer s a, Wait.WaitStrategy w) => s -> w -> Sequence -> f Sequence -> IO (SequenceBarrier a)
 processingSequenceBarrier sequencer wait cursor dependents = do
   alertRef <- newIORef False
   return $ barrier alertRef

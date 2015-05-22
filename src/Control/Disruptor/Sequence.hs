@@ -131,7 +131,10 @@ sameSequence (Sequence (MutableByteArray a#)) (Sequence (MutableByteArray b#)) =
 #endif
 
 findMinimumSequence :: (F.Foldable f, GetSequence a) => f a -> IO (SequenceId c)
-findMinimumSequence = F.foldlM go maxBound
+findMinimumSequence = findMinimumSequence' maxBound
+
+findMinimumSequence' :: (F.Foldable f, GetSequence a) => SequenceId c -> f a -> IO (SequenceId c)
+findMinimumSequence' = F.foldlM go
   where
     go cur seq = min cur <$> get seq
 

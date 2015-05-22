@@ -42,28 +42,25 @@ data RingBuffer s a = RingBuffer
   , ringBufferSequence :: !s
   }
 
-mkRingBuffer :: (Sequencer s) => s -> IO (RingBuffer s a)
+mkRingBuffer :: (Sequencer s a) => s -> IO (RingBuffer s a)
 mkRingBuffer s = do
-  bufferPower <- getBufferSize s
-  ringBuffer <- M.new $ nTo bufferPower
+  ringBuffer <- M.new $ nTo $ bufferSize s
   return $ RingBuffer ringBuffer s
 
-mkRingBuffer' :: (Sequencer s) => s -> IO a -> IO (RingBuffer s a)
+mkRingBuffer' :: (Sequencer s a) => s -> IO a -> IO (RingBuffer s a)
 mkRingBuffer' s m = do
-  bufferPower <- getBufferSize s
-  ringBuffer <- V.replicateM (nTo bufferPower) m >>= V.unsafeThaw
-  bufferPower <- getBufferSize s
+  ringBuffer <- V.replicateM (nTo $ bufferSize s) m >>= V.unsafeThaw
   return $ RingBuffer ringBuffer s
 
 instance DataProvider (RingBuffer s a) a where
   get (RingBuffer b _) s = M.unsafeRead b (calculatedIndex s b)
 
 -- | TODO get Cursor to force produced SequenceId to unify with 'a'
-instance Cursor s => Cursor (RingBuffer s a) where
+instance Cursor s a => Cursor (RingBuffer s a) a where
   getCursor = getCursor . ringBufferSequence
 
-instance Sequenced s => Sequenced (RingBuffer s a) where
-  getBufferSize = getBufferSize . ringBufferSequence
+instance Sequenced s a => Sequenced (RingBuffer s a) a where
+  bufferSize = bufferSize . ringBufferSequence
   hasAvailableCapacity = hasAvailableCapacity . ringBufferSequence
   remainingCapacity = remainingCapacity . ringBufferSequence
   next = next . ringBufferSequence
@@ -73,7 +70,7 @@ instance Sequenced s => Sequenced (RingBuffer s a) where
   publish = publish . ringBufferSequence
   publishN = publishN . ringBufferSequence
 
-instance (Sequencer s) => Sequencer (RingBuffer s a) where
+instance (Sequencer s a) => Sequencer (RingBuffer s a) a where
   claim = claim . ringBufferSequence
   isAvailable = isAvailable . ringBufferSequence
   addGatingSequences = addGatingSequences . ringBufferSequence
@@ -90,7 +87,7 @@ atEnd :: IO b -> IO a -> IO a
 atEnd = flip finally
 {-# INLINE atEnd #-}
 
-instance (Sequenced s) => Sink.Sink (RingBuffer s a) a where
+instance (Sequenced s a) => Sink.Sink (RingBuffer s a) a where
   publish (RingBuffer b s) u = do
     sequence <- next s
     (atEnd $ publish s sequence) $ do
@@ -101,13 +98,10 @@ instance (Sequenced s) => Sink.Sink (RingBuffer s a) a where
 
   tryPublish (RingBuffer b s) u = do
     mSequence <- tryNext s
-    case mSequence of
-      Nothing -> report Sink.InsufficientCapacity
-      Just sequence -> (atEnd $ publish s sequence) $ do
-        let ix = calculatedIndex sequence b
-        x <- M.unsafeRead b ix
-        u x (M.unsafeWrite b ix)
-        ok ()
+    onOk mSequence $ \sequence -> (atEnd $ publish s sequence) $ do
+      let ix = calculatedIndex sequence b
+      x <- M.unsafeRead b ix
+      u x (M.unsafeWrite b ix)
 
   publishMany (RingBuffer b s) us total = do
     range@(lo, hi) <- nextN s $ fromIntegral $ V.length us
@@ -119,17 +113,14 @@ instance (Sequenced s) => Sink.Sink (RingBuffer s a) a where
 
   tryPublishMany (RingBuffer b s) us total = do
     mHi <- tryNextN s $ fromIntegral $ V.length us
-    case mHi of
-      Nothing -> report Sink.InsufficientCapacity
-      Just hi -> do
-        let lo =  hi - fromIntegral (V.length us - 1)
-        (atEnd $ publishN s (lo, hi)) $ F.forM_ (V.indexed us) $ \(i, u) -> do
-          let ix = calculatedIndex (lo + fromIntegral i) b
-          x <- M.unsafeRead b ix
-          u x (M.unsafeWrite b ix)
-        ok ()
+    onOk mHi $ \hi -> do
+      let lo =  hi - fromIntegral (V.length us - 1)
+      (atEnd $ publishN s (lo, hi)) $ F.forM_ (V.indexed us) $ \(i, u) -> do
+        let ix = calculatedIndex (lo + fromIntegral i) b
+        x <- M.unsafeRead b ix
+        u x (M.unsafeWrite b ix)
 
-type SequencedBuffer a = forall s. Sequencer s => RingBuffer s a
+type SequencedBuffer a = forall s. Sequencer s a => RingBuffer s a
 
 resetTo :: SequencedBuffer a -> SequenceId a -> IO ()
 resetTo = undefined
