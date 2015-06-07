@@ -2,8 +2,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 module Data.Vector.Expandable.Mutable where
-import Control.Monad.Primitive
--- import Data.Primitive.MutVar
+import           Control.Disruptor.Math
+import           Control.Monad.Primitive
 import           Data.Bits
 import qualified Data.Vector.Generic.Mutable as G
 import qualified Data.Vector.Mutable as MV
@@ -28,7 +28,7 @@ instance G.MVector MVector a where
     = G.basicOverlaps (G.basicUnsafeSlice i m v1) (G.basicUnsafeSlice j n v2)
 
   {-# INLINE basicUnsafeNew #-}
-  basicUnsafeNew n = MVector 0 n <$> G.basicUnsafeNew n <*> pure defaultGrowthStrategy
+  basicUnsafeNew n = MVector 0 0 <$> G.basicUnsafeNew (ceilingNextPowerOfTwo n) <*> pure defaultGrowthStrategy
 
   {-# INLINE basicUnsafeRead #-}
   basicUnsafeRead (MVector i _ v _) j = G.basicUnsafeRead v (i + j)
@@ -48,14 +48,25 @@ cons x (MVector o l v resize) = do
     then MV.new $ resize actualLength
     else return v
   let target = MV.unsafeSlice 1 l baseTarget
-  MV.move original target
-  MV.write baseTarget 0 x
-  return $ MVector o (1 + l) baseTarget resize
+  MV.unsafeMove target original
+  MV.unsafeWrite baseTarget 0 x
+  return $ MVector o (succ l) baseTarget resize
 
 unsafeUnexpand :: MVector s a -> MV.MVector s a
 unsafeUnexpand (MVector io lo (MV.MVector i l arr) _) = MV.MVector (io + i) lo arr
 
--- snoc :: (PrimMonad m) => MVector (PrimMonad m) a -> a -> m ()
+snoc :: (PrimMonad m) => MVector (PrimState m) a -> a -> m (MVector (PrimState m) a)
+snoc (MVector o l v resize) x = do
+  let actualLength = MV.length v
+  v' <- if actualLength == l
+    then do
+      target <- MV.new $ resize actualLength
+      MV.unsafeCopy (MV.unsafeSlice o l target) v
+      return target
+    else return v
+  MV.unsafeWrite v' l x
+  return $ MVector o (succ l) v' resize
+
 -- insert :: (PrimMonad m) => Int -> a -> MVector (PrimMonad m) a -> m ()
 -- delete :: (PrimMonad m) => Int -> MVector (PrimMonad m) a -> m ()
 

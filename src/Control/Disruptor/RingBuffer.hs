@@ -120,14 +120,16 @@ instance (Sequenced s a) => Sink.Sink (RingBuffer s a) a where
         x <- M.unsafeRead b ix
         u x (M.unsafeWrite b ix)
 
-type SequencedBuffer a = forall s. Sequencer s a => RingBuffer s a
+resetTo :: Sequencer s a => RingBuffer s a -> SequenceId a -> IO ()
+resetTo (RingBuffer { ringBufferSequence = seq }) sid = do
+  claim seq sid
+  publish seq sid
 
-resetTo :: SequencedBuffer a -> SequenceId a -> IO ()
-resetTo = undefined
+claimAndGetPreallocated :: Sequencer s a => RingBuffer s a -> SequenceId a -> IO a
+claimAndGetPreallocated buf sid = do
+  claim buf sid
+  Control.Disruptor.DataProvider.get buf sid
 
-claimAndGetPreallocated :: SequencedBuffer a -> SequenceId a -> IO a
-claimAndGetPreallocated = undefined
-
-isPublished :: SequencedBuffer a -> SequenceId a -> IO Bool
-isPublished = undefined
+isPublished :: Sequencer s a => RingBuffer s a -> SequenceId a -> IO Bool
+isPublished = isAvailable
 

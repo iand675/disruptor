@@ -59,6 +59,16 @@ acquire l = do
   val <- takeMVar $ lock l
   return $ Acquisition (putMVar (lock l) val)
 
+tryAcquire :: Lock -> IO (Maybe (Acquisition Lock))
+tryAcquire l = do
+  mVal <- tryTakeMVar $ lock l
+  return $ case mVal of
+    Nothing -> Nothing
+    Just val -> Just $ Acquisition (putMVar (lock l) val)
+
+locked :: Lock -> IO Bool
+locked = isEmptyMVar . lock
+
 registerCondition :: Lock -> IO (Condition Lock)
 registerCondition l = mask_ $ do
   conds <- takeMVar $ lockConditions l

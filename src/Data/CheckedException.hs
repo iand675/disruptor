@@ -25,6 +25,7 @@ module Data.CheckedException
     ) where
 
 import Data.Dynamic
+import Unsafe.Coerce
 
 type Checked a = Either (Union a)
 
@@ -39,6 +40,9 @@ ok = pure . Right
 onOk :: Monad m => Checked s a -> (a -> m b) -> m (Checked s b)
 onOk (Right x) f = Right <$> f x
 onOk (Left err) _ = return $ Left err
+
+forwardCheck :: (s :< s') => Checked s a -> Checked s' a
+forwardCheck = unsafeCoerce
 
 -- | The @Union@ type - the phantom parameter @s@ is a list of types
 -- denoting what this @Union@ might contain.
@@ -78,7 +82,7 @@ restrict (Union d) = maybe (Left $ Union d) Right $ fromDynamic d
 
 -- | Generalize a @Union@.
 reUnion :: (s :< s') => Union s -> Union s'
-reUnion (Union d) = Union d
+reUnion = unsafeCoerce
 {-# INLINE reUnion #-}
 
 -- | Use this in places where all the @Union@ed options have been exhausted.
